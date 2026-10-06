@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_radius.dart';
 import '../core/ui/ui.dart';
 import '../models/attempt_score.dart';
 import '../services/attempt_service.dart';
+import '../state/auth_provider.dart';
+import 'packages_screen.dart';
 import 'ranking_screen.dart';
 import 'review_screen.dart';
 
@@ -46,6 +49,7 @@ class _ResultScreenState extends State<ResultScreen> {
             );
           }
           final r = snap.data!;
+          final memberAktif = context.watch<AuthProvider>().user?.memberAktif ?? false;
           final passed = r.attempt.isPassed;
           final benar = r.scores.fold<int>(0, (a, s) => a + s.correctCount);
           final salah = r.scores.fold<int>(0, (a, s) => a + s.wrongCount);
@@ -70,6 +74,13 @@ class _ResultScreenState extends State<ResultScreen> {
               const SectionHeader(title: 'Rincian per Kategori'),
               const SizedBox(height: 8),
               for (final s in r.scores) _CategoryCard(score: s),
+
+              // Ajakan menjadi member (khusus non-member): tryout gratis terbatas,
+              // upgrade untuk kesempatan lebih banyak + analisis & pembahasan lengkap.
+              if (!memberAktif) ...[
+                const SizedBox(height: 12),
+                const _UpgradeCta(),
+              ],
 
               const SizedBox(height: 12),
               PrimaryButton(
@@ -175,6 +186,57 @@ class _CategoryCard extends StatelessWidget {
             tone: score.isPassed ? BadgeTone.success : BadgeTone.warning,
           ),
         ]),
+      ]),
+    );
+  }
+}
+
+/// Kartu ajakan upgrade membership — muncul setelah menyelesaikan tryout bagi
+/// pengguna non-member. Tryout gratis (Bronze) hanya 1x; untuk mengulang &
+/// membuka fitur lengkap, pengguna diarahkan memilih paket.
+class _UpgradeCta extends StatelessWidget {
+  const _UpgradeCta();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: const BoxDecoration(
+        gradient: AppColors.ctaGradient,
+        borderRadius: AppRadius.brLg,
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Row(children: [
+          Icon(Icons.workspace_premium_rounded, color: Colors.white),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text('Mau coba tryout lagi?',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
+          ),
+        ]),
+        const SizedBox(height: 6),
+        const Text(
+          'Paket gratis hanya 1x try out. Jadi member untuk tryout lebih banyak, '
+          'pembahasan lengkap, analisis kelemahan, dan leaderboard.',
+          style: TextStyle(color: Colors.white, height: 1.4, fontSize: 13),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: AppColors.primaryDark,
+              padding: const EdgeInsets.symmetric(vertical: 13),
+            ),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const PackagesScreen()),
+            ),
+            icon: const Icon(Icons.workspace_premium_rounded, size: 18),
+            label: const Text('Lihat Paket Member', style: TextStyle(fontWeight: FontWeight.w800)),
+          ),
+        ),
       ]),
     );
   }

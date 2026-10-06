@@ -1,9 +1,21 @@
 import 'package:dio/dio.dart';
 
 import '../core/api_client.dart';
+import '../core/server_clock.dart';
 import '../models/package.dart';
 import '../models/payment_method.dart';
 import '../models/transaction.dart';
+
+/// Hasil `GET /packages`: daftar paket + jam server untuk countdown promo.
+class PackageCatalog {
+  final List<Package> packages;
+
+  /// Jam tersinkron server; dipakai agar countdown/harga promo mengacu waktu
+  /// server (tidak bisa dicurangi dengan memundurkan jam perangkat).
+  final ServerClock clock;
+
+  PackageCatalog(this.packages, this.clock);
+}
 
 /// Konsumsi endpoint paket & pembayaran peserta.
 class CommerceService {
@@ -11,10 +23,35 @@ class CommerceService {
 
   CommerceService({ApiClient? api}) : _api = api ?? ApiClient();
 
-  Future<List<Package>> packages() async {
+  /// Mengembalikan paket + jam server.
+  ///
+  /// Mendukung dua bentuk respons pada field `data` envelope:
+  ///  - List paket (format lama), atau
+  ///  - Map `{ packages: [...], server_time: "ISO8601" }` (format baru, membawa
+  ///    waktu server untuk countdown promo).
+  Future<PackageCatalog> catalog() async {
     final data = await _api.get('packages');
-    return (data as List).map((e) => Package.fromJson(Map<String, dynamic>.from(e))).toList();
+
+    List rawList;
+    ServerClock clock;
+    if (data is Map) {
+      final list = (data['packages'] ?? data['items'] ?? data['data'] ?? const []) as List;
+      rawList = list;
+      final st = data['server_time'] ?? data['now'];
+      final parsed = st == null ? null : DateTime.tryParse(st.toString());
+      clock = parsed != null ? ServerClock(parsed) : ServerClock.fromDevice();
+    } else {
+      rawList = data as List;
+      clock = ServerClock.fromDevice();
+    }
+
+    final packages =
+        rawList.map((e) => Package.fromJson(Map<String, dynamic>.from(e))).toList();
+    return PackageCatalog(packages, clock);
   }
+
+  /// Kompat lama: hanya daftar paket.
+  Future<List<Package>> packages() async => (await catalog()).packages;
 
   Future<List<PaymentMethod>> paymentMethods() async {
     final data = await _api.get('payment-methods');

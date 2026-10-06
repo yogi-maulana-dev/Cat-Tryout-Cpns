@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:try_out_bayog/core/promo_config.dart';
 import 'package:try_out_bayog/core/theme/app_colors.dart';
 import 'package:try_out_bayog/features/landing/data/faq_data.dart';
 import 'package:try_out_bayog/features/landing/data/features_data.dart';
@@ -56,7 +57,7 @@ void main() {
     testWidgets('merender semua paket harga & fitur dari data', (tester) async {
       await _pumpLanding(tester);
 
-      for (final plan in kPricingPlans) {
+      for (final plan in kPackageCatalog) {
         expect(find.text(plan.name), findsOneWidget, reason: 'paket ${plan.name}');
       }
       for (final f in kFeatures) {
@@ -72,26 +73,24 @@ void main() {
     });
   });
 
-  group('LandingPage — toggle harga', () {
-    testWidgets('mengganti harga bulanan → tahunan', (tester) async {
+  group('LandingPage — promo Platinum', () {
+    testWidgets('kartu paket & keadaan promo konsisten dengan jendela promo', (tester) async {
       await _pumpLanding(tester);
 
-      // Kondisi awal: harga bulanan Basic.
-      expect(find.text('Rp 29.000'), findsOneWidget);
-      expect(find.text('Rp 290.000'), findsNothing);
+      // Harga yang tidak bergantung fase promo selalu tampil.
+      expect(find.text('Rp10.000'), findsWidgets); // Gold
+      expect(find.text('Rp30.000'), findsWidgets); // Platinum (normal)
+      expect(find.text('Gratis'), findsWidgets); // Bronze
 
-      final toggle = find.byKey(const Key('pricing_billing_toggle'));
-      expect(toggle, findsOneWidget);
-
-      await tester.ensureVisible(toggle);
-      await tester.tap(toggle);
-      await tester.pumpAndSettle();
-
-      // Setelah toggle: harga tahunan.
-      expect(find.text('Rp 290.000'), findsOneWidget);
-      expect(find.text('Rp 29.000'), findsNothing);
-      // Free tetap Rp 0.
-      expect(find.text('Rp 0'), findsOneWidget);
+      // Badge & harga promo hanya saat promo aktif → dihitung dari jendela nyata
+      // agar test tetap deterministik kapan pun dijalankan.
+      final active = kPlatinumPromoWindow.isActiveAt(DateTime.now().toUtc());
+      if (active) {
+        expect(find.text('PROMO 50%'), findsOneWidget);
+        expect(find.text('Rp15.000'), findsWidgets);
+      } else {
+        expect(find.text('PROMO 50%'), findsNothing);
+      }
     });
   });
 

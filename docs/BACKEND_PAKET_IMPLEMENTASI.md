@@ -3,8 +3,9 @@
 Video "MASIH BUG" menampilkan build LAMA (masih ada toggle Bulanan/Tahunan,
 harga Rp29.000, paket Basic/Premium/Bundle). Dua hal yang perlu dilakukan:
 
-1. **Frontend**: jalankan branch `claude/magical-lamport-8em5gz` (lihat bagian
-   akhir). Ini menghapus toggle & memakai desain 3 paket + promo.
+1. **Frontend**: jalankan branch fitur paket-promo (branch tempat perubahan ini
+   dikerjakan — lihat bagian akhir). Ini menghapus toggle & memakai desain 3
+   paket + promo.
 2. **Backend** (`D:\project\Try Out Bayog Backend`): layar "Paket Tryout"
    mengambil data dari `GET /packages`. Selama backend masih berisi paket lama,
    layar itu menampilkan paket lama. Terapkan migration + seeder + resource di
@@ -178,7 +179,7 @@ public function store(Request $request)
 
 ```bash
 git fetch origin
-git checkout claude/magical-lamport-8em5gz
+git checkout <branch-fitur-paket-promo>   # branch tempat perubahan ini
 git pull
 flutter clean && flutter pub get
 flutter run -d chrome    # lalu hard refresh: Ctrl+Shift+R

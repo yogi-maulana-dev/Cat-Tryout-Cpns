@@ -78,6 +78,7 @@ class ApiClient {
         statusCode: status,
         errors: data['errors'] is Map ? Map<String, dynamic>.from(data['errors']) : null,
         code: data['code']?.toString(),
+        payload: data['data'] is Map ? Map<String, dynamic>.from(data['data']) : null,
       );
     }
     throw ApiException('Respons server tidak valid.', statusCode: status);

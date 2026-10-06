@@ -1,0 +1,28 @@
+name: try_out_bayog
+description: Frontend Flutter untuk platform Tryout CPNS — konsumsi REST API Laravel (Try Out Bayog backend).
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+  flutter: ">=3.19.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  dio: ^5.7.0                    # HTTP client (interceptor token, error mapping)
+  provider: ^6.1.2              # state management (AuthProvider)
+  flutter_secure_storage: ^9.2.2 # simpan token Sanctum dengan aman
+  intl: ^0.19.0                 # format tanggal/angka
+  pusher_channels_flutter: ^2.4.0 # WebSocket Reverb (protokol Pusher) — live monitoring
+  image_picker: ^1.1.2          # pilih gambar bukti pembayaran (web & mobile)
+  google_fonts: ^6.2.1          # font brand Plus Jakarta Sans
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true

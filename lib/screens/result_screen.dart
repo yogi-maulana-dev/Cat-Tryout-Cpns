@@ -1,26 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/api_exception.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_radius.dart';
 import '../core/ui/ui.dart';
 import '../models/attempt_score.dart';
 import '../services/attempt_service.dart';
 import '../state/auth_provider.dart';
+import 'attempt_screen.dart';
 import 'packages_screen.dart';
 import 'ranking_screen.dart';
 import 'review_screen.dart';
 
 class ResultScreen extends StatefulWidget {
   final String attemptId;
-  const ResultScreen({super.key, required this.attemptId});
+
+  /// Injeksi untuk pengujian; produksi memakai [AttemptService] default.
+  final AttemptService? service;
+
+  const ResultScreen({super.key, required this.attemptId, this.service});
 
   @override
   State<ResultScreen> createState() => _ResultScreenState();
 }
 
 class _ResultScreenState extends State<ResultScreen> {
-  final _service = AttemptService();
+  late final AttemptService _service = widget.service ?? AttemptService();
   late Future<ResultBundle> _future;
 
   @override
@@ -28,6 +34,11 @@ class _ResultScreenState extends State<ResultScreen> {
     super.initState();
     _future = _service.result(widget.attemptId);
   }
+
+  /// true bila error menandakan attempt belum diselesaikan (hasil belum ada).
+  bool _isNotFinished(Object? e) =>
+      e is ApiException &&
+      (e.isConflict || e.message.toLowerCase().contains('belum selesai'));
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +54,10 @@ class _ResultScreenState extends State<ResultScreen> {
             return const LoadingState(message: 'Menghitung hasil…');
           }
           if (snap.hasError) {
+            // Attempt belum diselesaikan → tawarkan lanjutkan, bukan error buntu.
+            if (_isNotFinished(snap.error)) {
+              return _NotFinishedView(attemptId: widget.attemptId);
+            }
             return ErrorStateView(
               message: '${snap.error}',
               onRetry: () => setState(() => _future = _service.result(widget.attemptId)),
@@ -187,6 +202,65 @@ class _CategoryCard extends StatelessWidget {
           ),
         ]),
       ]),
+    );
+  }
+}
+
+/// Ditampilkan saat hasil diminta untuk attempt yang BELUM diselesaikan
+/// (backend balas 409 "Attempt belum selesai"). Alih-alih error buntu, peserta
+/// diarahkan melanjutkan pengerjaan.
+class _NotFinishedView extends StatelessWidget {
+  const _NotFinishedView({required this.attemptId});
+  final String attemptId;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              height: 72,
+              width: 72,
+              decoration: BoxDecoration(
+                color: AppColors.warning.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.timelapse_rounded, color: AppColors.warning, size: 36),
+            ),
+            const SizedBox(height: 16),
+            const Text('Tryout Belum Selesai',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+            const SizedBox(height: 8),
+            const Text(
+              'Hasil belum tersedia karena tryout ini belum kamu selesaikan. '
+              'Lanjutkan pengerjaan lalu tekan Selesai untuk melihat hasil & pembahasan.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.textSecondary, height: 1.4),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: 260,
+              child: PrimaryButton(
+                label: 'Lanjutkan Tryout',
+                icon: Icons.play_arrow_rounded,
+                onPressed: () => Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (_) => AttemptScreen(attemptId: attemptId)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextButton.icon(
+              onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
+              icon: const Icon(Icons.home_rounded, size: 18),
+              label: const Text('Kembali ke Beranda'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

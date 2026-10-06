@@ -19,6 +19,9 @@ class HistoryItem {
     this.finishedAt,
   });
 
+  bool get isOngoing => status == 'ongoing';
+  bool get isFinished => status == 'finished' || status == 'expired';
+
   factory HistoryItem.fromJson(Map<String, dynamic> j) => HistoryItem(
         attemptId: j['attempt_id'].toString(),
         examSessionId: j['exam_session_id'].toString(),

@@ -6,6 +6,7 @@ import '../core/theme/app_radius.dart';
 import '../core/ui/ui.dart';
 import '../models/history_item.dart';
 import '../services/exam_service.dart';
+import 'attempt_screen.dart';
 import 'result_screen.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -115,22 +116,32 @@ class _HistoryTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final passed = item.isPassed;
+    final ongoing = item.isOngoing;
     return AppCard(
       margin: const EdgeInsets.only(bottom: 12),
+      // Attempt yang belum selesai → lanjutkan; selesai → lihat hasil.
       onTap: () => Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => ResultScreen(attemptId: item.attemptId)),
+        MaterialPageRoute(
+          builder: (_) => ongoing
+              ? AttemptScreen(attemptId: item.attemptId)
+              : ResultScreen(attemptId: item.attemptId),
+        ),
       ),
       child: Row(children: [
         Container(
           height: 46,
           width: 46,
           decoration: BoxDecoration(
-            color: (passed ? AppColors.primary : AppColors.warning).withValues(alpha: 0.12),
+            color: (ongoing ? AppColors.info : (passed ? AppColors.primary : AppColors.warning))
+                .withValues(alpha: 0.12),
             borderRadius: AppRadius.brMd,
           ),
-          child: Icon(passed ? Icons.workspace_premium_rounded : Icons.assignment_turned_in_rounded,
-              color: passed ? AppColors.primary : AppColors.warning),
+          child: Icon(
+              ongoing
+                  ? Icons.timelapse_rounded
+                  : (passed ? Icons.workspace_premium_rounded : Icons.assignment_turned_in_rounded),
+              color: ongoing ? AppColors.info : (passed ? AppColors.primary : AppColors.warning)),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -142,21 +153,23 @@ class _HistoryTile extends StatelessWidget {
             const SizedBox(height: 3),
             Text(
               'Percobaan ke-${item.attemptNumber}'
-              '${item.finishedAt != null ? ' • ${DateFormat('d MMM yyyy, HH:mm').format(item.finishedAt!.toLocal())}' : ''}',
+              '${!ongoing && item.finishedAt != null ? ' • ${DateFormat('d MMM yyyy, HH:mm').format(item.finishedAt!.toLocal())}' : ''}',
               style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
             ),
           ]),
         ),
         const SizedBox(width: 8),
-        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text('${item.totalScore}',
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
-          const SizedBox(height: 2),
-          StatusBadge(
-            label: passed ? 'Lulus' : 'Belum',
-            tone: passed ? BadgeTone.success : BadgeTone.warning,
-          ),
-        ]),
+        ongoing
+            ? const StatusBadge(label: 'Lanjutkan', tone: BadgeTone.info, icon: Icons.play_arrow_rounded)
+            : Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                Text('${item.totalScore}',
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+                const SizedBox(height: 2),
+                StatusBadge(
+                  label: passed ? 'Lulus' : 'Belum',
+                  tone: passed ? BadgeTone.success : BadgeTone.warning,
+                ),
+              ]),
       ]),
     );
   }

@@ -7,6 +7,7 @@ import '../../../../core/theme/app_radius.dart';
 import '../../../../core/ui/ui.dart';
 import '../../../../models/exam.dart';
 import '../../../../models/history_item.dart';
+import '../../../../screens/attempt_screen.dart';
 import '../../../../screens/exam_detail_screen.dart';
 import '../../../../screens/history_screen.dart';
 import '../../../../screens/packages_screen.dart';
@@ -241,45 +242,60 @@ class _LastResultCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ongoing = item.isOngoing;
     return AppCard(
+      // Attempt yang belum selesai → lanjutkan pengerjaan; selesai → lihat hasil.
       onTap: () => Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => ResultScreen(attemptId: item.attemptId)),
+        MaterialPageRoute(
+          builder: (_) => ongoing
+              ? AttemptScreen(attemptId: item.attemptId)
+              : ResultScreen(attemptId: item.attemptId),
+        ),
       ),
       child: Row(children: [
         Container(
           height: 46,
           width: 46,
           decoration: BoxDecoration(
-            color: (item.isPassed ? AppColors.primary : AppColors.warning).withValues(alpha: 0.12),
+            color: (ongoing
+                    ? AppColors.info
+                    : (item.isPassed ? AppColors.primary : AppColors.warning))
+                .withValues(alpha: 0.12),
             borderRadius: AppRadius.brMd,
           ),
-          child: Icon(item.isPassed ? Icons.workspace_premium_rounded : Icons.history_rounded,
-              color: item.isPassed ? AppColors.primary : AppColors.warning),
+          child: Icon(
+              ongoing
+                  ? Icons.timelapse_rounded
+                  : (item.isPassed ? Icons.workspace_premium_rounded : Icons.history_rounded),
+              color: ongoing ? AppColors.info : (item.isPassed ? AppColors.primary : AppColors.warning)),
         ),
         const SizedBox(width: 12),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Hasil Terakhir', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            Text(ongoing ? 'Sedang Berjalan' : 'Hasil Terakhir',
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
             const SizedBox(height: 2),
             Text(item.namaSesi ?? 'Tryout',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-            if (item.finishedAt != null)
+            if (!ongoing && item.finishedAt != null)
               Text(DateFormat('d MMM yyyy, HH:mm').format(item.finishedAt!.toLocal()),
                   style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
           ]),
         ),
         const SizedBox(width: 8),
-        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text('${item.totalScore}',
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
-          StatusBadge(
-            label: item.isPassed ? 'Lulus' : 'Belum',
-            tone: item.isPassed ? BadgeTone.success : BadgeTone.warning,
-          ),
-        ]),
+        ongoing
+            ? const StatusBadge(label: 'Lanjutkan', tone: BadgeTone.info, icon: Icons.play_arrow_rounded)
+            : Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                Text('${item.totalScore}',
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+                StatusBadge(
+                  label: item.isPassed ? 'Lulus' : 'Belum',
+                  tone: item.isPassed ? BadgeTone.success : BadgeTone.warning,
+                ),
+              ]),
       ]),
     );
   }

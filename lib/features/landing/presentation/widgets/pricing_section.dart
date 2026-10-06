@@ -1,26 +1,33 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/money.dart';
+import '../../../../core/promo.dart';
+import '../../../../core/promo_config.dart';
 import '../../../../core/responsive.dart';
+import '../../../../core/server_clock.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_shadows.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_text_styles.dart';
-import '../../data/pricing_data.dart';
+import '../../../../core/ui/promo_countdown.dart';
+import '../../../../core/wib.dart';
 import 'landing_actions.dart';
 import 'landing_buttons.dart';
 import 'section_container.dart';
 
-class PricingSection extends StatefulWidget {
-  const PricingSection({super.key, required this.actions});
+/// Section harga landing: tiga kartu paket (Bronze / Gold / Platinum) dengan
+/// promo Platinum (harga coret, diskon, countdown). Promo & harga memakai
+/// definisi di [kPackageCatalog].
+///
+/// Catatan: pada landing (publik, tanpa sesi), countdown dihitung dari jam
+/// perangkat. Pada alur berbayar (login), countdown & harga memakai waktu
+/// server (lihat `ServerClock` di `PackagesScreen`). Penegakan harga promo
+/// tetap dilakukan server saat order dibuat.
+class PricingSection extends StatelessWidget {
+  PricingSection({super.key, required this.actions});
   final LandingActions actions;
-
-  @override
-  State<PricingSection> createState() => _PricingSectionState();
-}
-
-class _PricingSectionState extends State<PricingSection> {
-  bool _yearly = false;
+  final ServerClock _clock = ServerClock.fromDevice();
 
   @override
   Widget build(BuildContext context) {
@@ -32,20 +39,15 @@ class _PricingSectionState extends State<PricingSection> {
             eyebrow: 'Harga',
             title: 'Harga yang Fleksibel untuk Semua Kebutuhanmu',
             description:
-                'Pilih paket sesuai tujuan dan kebutuhan belajarmu. Mulai dari gratis hingga paket lengkap.',
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          _BillingToggle(
-            yearly: _yearly,
-            onChanged: (v) => setState(() => _yearly = v),
+                'Pilih paket sesuai kebutuhan belajarmu. Mulai dari Bronze gratis hingga Platinum paling lengkap.',
           ),
           const SizedBox(height: AppSpacing.xl),
           LayoutBuilder(
             builder: (context, c) {
               final device = Responsive.fromWidth(c.maxWidth);
               final columns = switch (device) {
-                DeviceType.desktop => 4,
-                DeviceType.tablet => 2,
+                DeviceType.desktop => 3,
+                DeviceType.tablet => 3,
                 DeviceType.mobile => 1,
               };
               const gap = 20.0;
@@ -55,14 +57,13 @@ class _PricingSectionState extends State<PricingSection> {
                 runSpacing: gap,
                 alignment: WrapAlignment.center,
                 children: [
-                  for (final plan in kPricingPlans)
+                  for (final plan in kPackageCatalog)
                     SizedBox(
                       width: itemW,
-                      child: _PricingCard(
+                      child: _PlanCard(
                         plan: plan,
-                        yearly: _yearly,
-                        // Semua CTA paket mengarah ke registrasi (mock, tanpa checkout).
-                        onSelect: () => widget.actions.goRegister(context),
+                        clock: _clock,
+                        onSelect: () => actions.goRegister(context),
                       ),
                     ),
                 ],
@@ -70,86 +71,53 @@ class _PricingSectionState extends State<PricingSection> {
             },
           ),
           const SizedBox(height: AppSpacing.md),
-          const Text('Harga adalah contoh dan dapat berubah sewaktu-waktu.',
-              textAlign: TextAlign.center, style: AppTextStyles.caption),
+          const Text(
+            'Harga dapat berubah sesuai kebijakan promo. Harga final dikonfirmasi saat checkout.',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.caption,
+          ),
         ],
       ),
     );
   }
 }
 
-class _BillingToggle extends StatelessWidget {
-  const _BillingToggle({required this.yearly, required this.onChanged});
-  final bool yearly;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    Widget label(String text, bool active) => Text(
-          text,
-          style: AppTextStyles.button.copyWith(
-            color: active ? AppColors.navy : AppColors.textSecondary,
-          ),
-        );
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        label('Bulanan', !yearly),
-        const SizedBox(width: 12),
-        Semantics(
-          toggled: yearly,
-          label: 'Periode tagihan tahunan',
-          child: GestureDetector(
-            key: const Key('pricing_billing_toggle'),
-            onTap: () => onChanged(!yearly),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              width: 56,
-              height: 30,
-              padding: const EdgeInsets.all(3),
-              decoration: BoxDecoration(
-                color: yearly ? AppColors.primary : const Color(0xFFCFE9DB),
-                borderRadius: AppRadius.brPill,
-              ),
-              child: AnimatedAlign(
-                duration: const Duration(milliseconds: 180),
-                alignment: yearly ? Alignment.centerRight : Alignment.centerLeft,
-                child: Container(
-                  width: 24,
-                  height: 24,
-                  decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                ),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        label('Tahunan', yearly),
-        const SizedBox(width: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: const BoxDecoration(color: AppColors.primarySoft, borderRadius: AppRadius.brPill),
-          child: Text('Hemat',
-              style: AppTextStyles.caption
-                  .copyWith(color: AppColors.primaryDark, fontWeight: FontWeight.w700)),
-        ),
-      ],
-    );
-  }
-}
-
-class _PricingCard extends StatelessWidget {
-  const _PricingCard({required this.plan, required this.yearly, required this.onSelect});
-  final PricingPlan plan;
-  final bool yearly;
+class _PlanCard extends StatefulWidget {
+  const _PlanCard({required this.plan, required this.clock, required this.onSelect});
+  final PackageTierConfig plan;
+  final ServerClock clock;
   final VoidCallback onSelect;
 
   @override
+  State<_PlanCard> createState() => _PlanCardState();
+}
+
+class _PlanCardState extends State<_PlanCard> {
+  PackageTierConfig get plan => widget.plan;
+
+  PromoState get _state {
+    final w = plan.promoWindow;
+    if (w == null || plan.promoPrice == null) return PromoState.none;
+    return w.stateAt(widget.clock.now());
+  }
+
+  Color get _accent {
+    switch (plan.slug) {
+      case 'platinum':
+        return AppColors.info;
+      case 'gold':
+        return AppColors.warning;
+      default:
+        return AppColors.primary;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final highlighted = plan.highlighted;
-    final price = plan.priceFor(yearly);
-    final period = price == 0 ? '/selamanya' : (yearly ? '/tahun' : '/bulan');
+    final state = _state;
+    final promoActive = state == PromoState.active;
+    final highlighted = plan.slug == 'platinum';
+    final price = promoActive ? plan.promoPrice! : plan.normalPrice;
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -157,7 +125,7 @@ class _PricingCard extends StatelessWidget {
         color: AppColors.surface,
         borderRadius: AppRadius.brLg,
         border: Border.all(
-          color: highlighted ? AppColors.primary : AppColors.border,
+          color: highlighted ? _accent : AppColors.border,
           width: highlighted ? 2 : 1,
         ),
         boxShadow: highlighted ? AppShadows.elevated : AppShadows.card,
@@ -166,60 +134,119 @@ class _PricingCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              Expanded(child: Text(plan.name, style: AppTextStyles.h3)),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: highlighted ? AppColors.primary : AppColors.primarySoft,
-                  borderRadius: AppRadius.brPill,
-                ),
-                child: Text(
-                  plan.label,
-                  style: AppTextStyles.caption.copyWith(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w800,
-                    color: highlighted ? Colors.white : AppColors.primaryDark,
-                  ),
-                ),
-              ),
-            ],
-          ),
+          Row(children: [
+            Expanded(child: Text(plan.name, style: AppTextStyles.h3)),
+            if (promoActive)
+              _badge('PROMO ${plan.discount}%', AppColors.danger)
+            else if (plan.isPopular)
+              _badge('POPULER', _accent)
+            else if (plan.slug == 'platinum')
+              _badge('UNGGULAN', _accent)
+            else if (plan.isFree)
+              _badge('GRATIS', _accent),
+          ]),
+          const SizedBox(height: 6),
+          Text(plan.tagline, style: AppTextStyles.caption),
           const SizedBox(height: 16),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Flexible(
-                child: Text(formatRupiah(price),
-                    style: AppTextStyles.h1.copyWith(fontSize: 30), overflow: TextOverflow.ellipsis),
-              ),
-              const SizedBox(width: 4),
-              Text(period, style: AppTextStyles.caption),
-            ],
-          ),
-          const SizedBox(height: 20),
+
+          // Harga (coret + promo bila aktif)
+          if (promoActive) ...[
+            Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+              Text(rupiah(plan.normalPrice),
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
+                    decoration: TextDecoration.lineThrough,
+                  )),
+              const SizedBox(width: 8),
+              _badge('-${plan.discount}%', AppColors.danger),
+            ]),
+            const SizedBox(height: 2),
+          ],
+          Text(rupiah(price), style: AppTextStyles.h1.copyWith(fontSize: 30)),
+
+          // Countdown / status promo
+          if (promoActive && plan.promoWindow != null) ...[
+            const SizedBox(height: 14),
+            _promoBox(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Row(children: [
+                  Icon(Icons.local_fire_department_rounded, size: 15, color: AppColors.danger),
+                  SizedBox(width: 6),
+                  Text('Promo berakhir dalam',
+                      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.danger)),
+                ]),
+                const SizedBox(height: 8),
+                PromoCountdown(
+                  clock: widget.clock,
+                  endsAt: plan.promoWindow!.endsAt,
+                  onEnded: () => setState(() {}),
+                ),
+                const SizedBox(height: 6),
+                Text('s/d ${formatWib(plan.promoWindow!.endsAt)}',
+                    style: const TextStyle(fontSize: 10.5, color: AppColors.textSecondary)),
+              ]),
+            ),
+          ] else if (state == PromoState.notStarted && plan.promoWindow != null) ...[
+            const SizedBox(height: 12),
+            Text('Promo mulai ${formatWib(plan.promoWindow!.startsAt)}',
+                style: const TextStyle(fontSize: 11.5, color: AppColors.info, fontWeight: FontWeight.w600)),
+          ],
+
+          const SizedBox(height: 16),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            _pill(Icons.event_available_rounded, 'Aktif ${plan.durationDays} hari'),
+            _pill(Icons.assignment_turned_in_rounded, '${plan.tryoutQuota}x try out'),
+          ]),
+          const SizedBox(height: 16),
           PrimaryButton(
-            label: plan.ctaText,
+            label: plan.isFree ? 'Mulai Gratis' : 'Pilih Paket',
             expand: true,
-            onPressed: onSelect,
+            onPressed: widget.onSelect,
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
           for (final f in plan.features)
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.check_circle_rounded, size: 18, color: AppColors.primary),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(f, style: AppTextStyles.bodySmall)),
-                ],
-              ),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Icon(Icons.check_circle_rounded, size: 18, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Expanded(child: Text(f, style: AppTextStyles.bodySmall)),
+              ]),
             ),
         ],
       ),
     );
   }
+
+  Widget _badge(String text, Color color) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(color: color, borderRadius: AppRadius.brPill),
+        child: Text(text,
+            style: AppTextStyles.caption
+                .copyWith(fontSize: 10.5, fontWeight: FontWeight.w800, color: Colors.white)),
+      );
+
+  Widget _promoBox({required Widget child}) => Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.danger.withValues(alpha: 0.06),
+          borderRadius: AppRadius.brMd,
+          border: Border.all(color: AppColors.danger.withValues(alpha: 0.25)),
+        ),
+        child: child,
+      );
+
+  Widget _pill(IconData icon, String text) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceAlt,
+          borderRadius: AppRadius.brPill,
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 14, color: AppColors.primaryDark),
+          const SizedBox(width: 6),
+          Text(text, style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+        ]),
+      );
 }

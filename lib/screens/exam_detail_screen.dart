@@ -11,6 +11,7 @@ import '../services/attempt_service.dart';
 import '../services/exam_service.dart';
 import '../state/auth_provider.dart';
 import 'attempt_screen.dart';
+import 'history_screen.dart';
 import 'packages_screen.dart';
 import 'ranking_screen.dart';
 
@@ -71,6 +72,9 @@ class _ExamDetailScreenState extends State<ExamDetailScreen> {
       if (!mounted) return;
       if (e.needsUpgrade) {
         _showUpgradePrompt(e.firstError); // kuota habis / khusus member → tawarkan upgrade
+      } else if (e.isConflict) {
+        // "Attempt belum selesai" → ada tryout berjalan. Lanjutkan, jangan buntu.
+        await _resumeOngoing(exam, e);
       } else {
         _snack(e.firstError);
       }
@@ -79,6 +83,79 @@ class _ExamDetailScreenState extends State<ExamDetailScreen> {
     } finally {
       if (mounted) setState(() => _starting = false);
     }
+  }
+
+  /// Start ditolak 409 (ada attempt berjalan). Alih-alih buntu, cari attempt
+  /// yang masih "ongoing" lalu lanjutkan; jika tak ditemukan, beri arahan jelas.
+  Future<void> _resumeOngoing(Exam exam, ApiException e) async {
+    // 1) Coba ambil id attempt dari payload error backend.
+    var attemptId = _attemptIdFromError(e);
+
+    // 2) Fallback: cari attempt 'ongoing' untuk sesi ini dari riwayat.
+    if (attemptId == null) {
+      try {
+        final page = await _examService.history();
+        for (final h in page.items) {
+          if (h.examSessionId == exam.id && h.status == 'ongoing') {
+            attemptId = h.attemptId;
+            break;
+          }
+        }
+      } catch (_) {
+        // abaikan; jatuh ke dialog arahan di bawah.
+      }
+    }
+
+    if (!mounted) return;
+    if (attemptId != null) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => AttemptScreen(attemptId: attemptId!)),
+      );
+    } else {
+      _showOngoingDialog(e.firstError);
+    }
+  }
+
+  /// Ambil id attempt dari berbagai kemungkinan bentuk payload error.
+  String? _attemptIdFromError(ApiException e) {
+    final p = e.payload;
+    if (p == null) return null;
+    final direct = p['attempt_id'] ?? p['attemptId'] ?? p['id'];
+    if (direct != null) return direct.toString();
+    final a = p['attempt'];
+    if (a is Map && a['id'] != null) return a['id'].toString();
+    return null;
+  }
+
+  /// Dialog saat ada tryout berjalan namun id-nya tidak bisa ditemukan otomatis.
+  void _showOngoingDialog(String reason) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(children: [
+          Icon(Icons.timelapse_rounded, color: AppColors.warning),
+          SizedBox(width: 10),
+          Expanded(child: Text('Tryout Belum Selesai')),
+        ]),
+        content: Text(
+          '$reason\n\nKamu masih punya tryout yang sedang berjalan. '
+          'Selesaikan dulu tryout tersebut dari menu Riwayat sebelum memulai yang baru.',
+          style: const TextStyle(height: 1.4),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Tutup')),
+          FilledButton.icon(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const HistoryScreen()));
+            },
+            icon: const Icon(Icons.history_rounded, size: 18),
+            label: const Text('Buka Riwayat'),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Dialog ajakan berlangganan saat akses tryout dibatasi (gratis 1x, premium, dll).

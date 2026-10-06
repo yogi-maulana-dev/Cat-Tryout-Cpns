@@ -14,7 +14,13 @@ class ApiException implements Exception {
   /// 'attempt_limit') untuk memicu aksi UI spesifik.
   final String? code;
 
-  ApiException(this.message, {this.statusCode, this.errors, this.isNetwork = false, this.code});
+  /// Isi field `data` dari envelope error (bila ada). Berguna mis. saat start
+  /// ditolak karena ada attempt berjalan: backend dapat menyertakan id attempt
+  /// di sini sehingga UI bisa menawarkan untuk melanjutkannya.
+  final Map<String, dynamic>? payload;
+
+  ApiException(this.message,
+      {this.statusCode, this.errors, this.isNetwork = false, this.code, this.payload});
 
   /// Error yang bisa diselesaikan dengan upgrade membership.
   bool get needsUpgrade => code == 'need_member' || code == 'quota_exceeded' || code == 'attempt_limit';
